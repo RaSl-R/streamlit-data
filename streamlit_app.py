@@ -1,4 +1,5 @@
 import streamlit as st
+import uuid
 import pandas as pd
 from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta
@@ -20,11 +21,34 @@ if "reset_success" not in st.session_state:
 
 # --- Mock autentizace (nebo jiný mechanismus) ---
 def get_current_user():
-    # V produkci napoj na autentizaci (např. Streamlit Cloud auth)
-    return "test_user@example.com"
+    # 1) Pokud je k dispozici autentizace přes Streamlit (OIDC apod.)
+    if hasattr(st, "user") and st.user and getattr(st.user, "is_logged_in", False):
+        return st.user.email
 
-st.session_state.user_id = get_current_user()
-st.write(f"Přihlášený uživatel: **{st.session_state.user_id}**")
+    # 2) Pokud uživatel zadal e-mail ručně
+    if st.session_state.get("logged_in", False):
+        return st.session_state.user_email
+
+    # 3) Jinak fallback na anonymní session ID
+    if "anon_id" not in st.session_state:
+        st.session_state.anon_id = f"anon_{uuid.uuid4()}"
+    return st.session_state.anon_id
+
+# --- UI logika pro ruční login ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in and not (
+    hasattr(st, "user") and st.user and getattr(st.user, "is_logged_in", False)
+):
+    email = st.text_input("Zadej svůj e-mail:")
+    if st.button("Přihlásit se") and email:
+        st.session_state.user_email = email
+        st.session_state.logged_in = True
+
+# --- Výpis identifikátoru ---
+current_user = get_current_user()
+st.write(f"Přihlášený uživatel/ID: {current_user}")
 
 # --- Načtení otázek ---
 @st.cache_data
