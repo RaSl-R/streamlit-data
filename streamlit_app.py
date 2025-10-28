@@ -8,7 +8,7 @@ from utils.db import get_engine
 engine = get_engine()
 
 st.set_page_config(layout="centered")
-st.title("Streamlit aplikace pro SnowPro Core certifikaci 🧊")
+st.title("Streamlit aplikace pro snowpro Core certifikaci 🧊")
 
 # --- Session state ---
 if "user_answers" not in st.session_state:
@@ -31,8 +31,18 @@ st.write(f"Přihlášený uživatel: **{st.session_state.user_id}**")
 def load_data():
     with engine.connect() as conn:
         df = pd.read_sql(
-            "SELECT * FROM my_schema.l2_snowpro_data_for_streamlit WHERE is_showed = 'Y'",
+            "SELECT * FROM snowpro.data_2 WHERE is_showed = 'Y'",
             conn
+        )
+    return df
+
+# --- Načtení těžkých/špatných otázek ---
+def load_hard_questions(user_id):
+    with engine.connect() as conn:
+        df = pd.read_sql(
+            text("SELECT * FROM snowpro.data_3 WHERE inserted_by = :uid"),
+            conn,
+            params={"uid": user_id}
         )
     return df
 
@@ -46,18 +56,24 @@ def save_answer_to_db(user_id, question_id, selected_answers):
     answers = ', '.join(selected_answers)
     with engine.begin() as conn:
         conn.execute(text("""
-            INSERT INTO my_schema.l2_user_answers (user_id, question_id, answer, inserted_datetime)
+            INSERT INTO snowpro.data_4 (user_id, question_id, answer, inserted_datetime)
             VALUES (:user_id, :question_id, :answer, NOW())
             ON CONFLICT (user_id, question_id)
             DO UPDATE SET answer = EXCLUDED.answer, inserted_datetime = NOW();
         """), {"user_id": user_id, "question_id": question_id, "answer": answers})
     st.session_state.user_answers = load_user_answers(user_id)
 
+if view_option == "Všechny otázky":
+    current = data.iloc[start:end]
+elif view_option == "Těžké otázky / Chybné otázky":
+    hard_questions = load_hard_questions(st.session_state.user_id)
+    current = hard_questions.iloc[start:end]
+
 # --- Načtení odpovědí uživatele ---
 def load_user_answers(user_id):
     with engine.connect() as conn:
         df = pd.read_sql(
-            text("SELECT question_id, answer FROM my_schema.l2_user_answers WHERE user_id = :uid"),
+            text("SELECT question_id, answer FROM snowpro.data_4 WHERE user_id = :uid"),
             conn,
             params={"uid": user_id}
         )
@@ -67,8 +83,9 @@ def load_user_answers(user_id):
 def add_row_to_db(row):
     with engine.begin() as conn:
         conn.execute(text("""
-            INSERT INTO my_schema.l2_snowpro_data_hard_or_wrong_questions
-            (question_id, question, answer_a, answer_b, answer_c, answer_d, answer_e, answer_f, suggested_answer, url, inserted_by)
+            INSERT INTO snowpro.data_3
+            (question_id, question, answer_a, answer_b, answer_c, answer_d, answer_e, answer_f,
+             formatted_suggested_answer, url, inserted_by)
             VALUES (:question_id, :question, :a, :b, :c, :d, :e, :f, :sugg, :url, :by)
         """), {
             "question_id": row["question_id"],
@@ -88,9 +105,24 @@ def add_row_to_db(row):
 # --- Reset všech odpovědí ---
 def reset_all_answers(user_id):
     with engine.begin() as conn:
-        conn.execute(text("DELETE FROM my_schema.l2_user_answers WHERE user_id = :uid"), {"uid": user_id})
-    st.session_state.user_answers = {}
+        conn.execute(text("DELETE FROM snowpro.data_4 WHERE user_id = :uid"), {"uid": user_id})
+    st.session_state.user_answers = load_user_answers(user_id)
     st.session_state.reset_success = True
+
+# --- Výběr typu otázek ---
+view_option = st.selectbox(
+    "Vyber otázky k zobrazení:",
+    ["Všechny otázky", "Těžké otázky / Chybné otázky"]
+)
+
+if view_option == "Všechny otázky":
+    current = data.iloc[start:end]
+elif view_option == "Těžké otázky / Chybné otázky":
+    hard_questions = load_hard_questions(st.session_state.user_id)
+    total_pages = (len(hard_questions) - 1) // questions_per_page + 1
+    start = st.session_state.page_number * questions_per_page
+    end = start + questions_per_page
+    current = hard_questions.iloc[start:end]
 
 # --- Zobrazení otázek ---
 def show_questions(current_data, user_answers):
@@ -114,7 +146,7 @@ def show_questions(current_data, user_answers):
             else:
                 with engine.begin() as conn:
                     conn.execute(text("""
-                        DELETE FROM my_schema.l2_user_answers 
+                        DELETE FROM snowpro.data_4 
                         WHERE user_id = :uid AND question_id = :qid
                     """), {"uid": st.session_state.user_id, "qid": qid})
                 st.session_state.user_answers = load_user_answers(st.session_state.user_id)
