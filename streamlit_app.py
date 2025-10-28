@@ -63,12 +63,6 @@ def save_answer_to_db(user_id, question_id, selected_answers):
         """), {"user_id": user_id, "question_id": question_id, "answer": answers})
     st.session_state.user_answers = load_user_answers(user_id)
 
-if view_option == "Všechny otázky":
-    current = data.iloc[start:end]
-elif view_option == "Těžké otázky / Chybné otázky":
-    hard_questions = load_hard_questions(st.session_state.user_id)
-    current = hard_questions.iloc[start:end]
-
 # --- Načtení odpovědí uživatele ---
 def load_user_answers(user_id):
     with engine.connect() as conn:
