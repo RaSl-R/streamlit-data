@@ -103,21 +103,6 @@ def reset_all_answers(user_id):
     st.session_state.user_answers = load_user_answers(user_id)
     st.session_state.reset_success = True
 
-# --- Výběr typu otázek ---
-view_option = st.selectbox(
-    "Vyber otázky k zobrazení:",
-    ["Všechny otázky", "Těžké otázky / Chybné otázky"]
-)
-
-if view_option == "Všechny otázky":
-    current = data.iloc[start:end]
-elif view_option == "Těžké otázky / Chybné otázky":
-    hard_questions = load_hard_questions(st.session_state.user_id)
-    total_pages = (len(hard_questions) - 1) // questions_per_page + 1
-    start = st.session_state.page_number * questions_per_page
-    end = start + questions_per_page
-    current = hard_questions.iloc[start:end]
-
 # --- Zobrazení otázek ---
 def show_questions(current_data, user_answers):
     for _, row in current_data.iterrows():
@@ -170,9 +155,24 @@ st.write(f"Stránka {st.session_state.page_number + 1} / {total_pages}")
 
 start = st.session_state.page_number * questions_per_page
 end = start + questions_per_page
+
+# --- Výběr typu otázek ---
+view_option = st.selectbox(
+    "Vyber otázky k zobrazení:",
+    ["Všechny otázky", "Těžké otázky / Chybné otázky"]
+)
+
+if view_option == "Všechny otázky":
+    current = data.iloc[start:end]
+elif view_option == "Těžké otázky / Chybné otázky":
+    hard_questions = load_hard_questions(st.session_state.user_id)
+    total_pages = (len(hard_questions) - 1) // questions_per_page + 1
+    start = st.session_state.page_number * questions_per_page
+    end = start + questions_per_page
+    current = hard_questions.iloc[start:end]
+
 current = data.iloc[start:end]
 user_answers = load_user_answers(st.session_state.user_id)
-
 show_questions(current, user_answers)
 
 col1, _, col3 = st.columns([1, 2, 1])
