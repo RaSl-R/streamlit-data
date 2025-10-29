@@ -48,6 +48,7 @@ if not st.session_state.logged_in and not (
 
 # --- Výpis identifikátoru ---
 current_user = get_current_user()
+st.session_state.user_id = current_user
 st.write(f"Přihlášený uživatel/ID: {current_user}")
 
 # --- Načtení otázek ---
